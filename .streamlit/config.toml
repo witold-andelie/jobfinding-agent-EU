@@ -1,7 +1,3 @@
 # Show full error details in the app (so failures surface instead of a blank page).
 [client]
-showErrorDetails = true
-
-[server]
-# Be resilient on small cloud instances.
-fileWatcherType = "none"
+showErrorDetails = "full"

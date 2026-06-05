@@ -34,6 +34,7 @@ from job_agent.tracker.state_machine import ALLOWED_TRANSITIONS  # noqa: E402
 from job_agent.ui.demo_data import demo_jobs  # noqa: E402
 
 st.set_page_config(page_title="EU Job Agent", layout="wide")
+st.caption("build 2026-06-05-d")  # version heartbeat: if you see this, the latest code is live
 
 
 def _application_store():
