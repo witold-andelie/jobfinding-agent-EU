@@ -1,0 +1,10 @@
+# Runtime deps for Streamlit Community Cloud (the deployed UI). Scrapling is
+# intentionally excluded — Live mode doesn't crawl career pages, and Cloud can't run
+# the Playwright browsers anyway.
+streamlit>=1.36
+pydantic>=2.7
+pydantic-settings>=2.3
+certifi>=2024.0
+openai>=1.40         # DeepSeek (chat) + Jina (embeddings), both OpenAI-protocol
+supabase>=2.0        # persistence
+python-docx>=1.1     # CV variant export

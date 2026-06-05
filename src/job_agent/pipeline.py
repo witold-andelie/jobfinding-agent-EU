@@ -1,0 +1,106 @@
+"""Assemble a production-wired ScoutAgent from the real sources.
+
+Keeps the wiring in one place so the UI (and scripts) get live jobs instead of demo
+data. Transports are injected, so the factory is unit-testable offline; only
+``production_transports`` actually touches the network (via stdlib urllib).
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from typing import Callable
+
+from job_agent.agents import ScoutAgent
+from job_agent.config import Settings, get_settings
+from job_agent.discovery.ats_search import AtsSearchDiscoverer, SearchFn
+from job_agent.discovery.base import CompanyDiscoverer
+from job_agent.discovery.seed import SeedDiscoverer
+from job_agent.models.company import CompanyTarget
+from job_agent.observability import ObservabilityStore
+from job_agent.persistence import JobStore
+from job_agent.sources import HttpGet
+from job_agent.sources.aggregators import ArbeitsagenturSource, EuresSource, JobRoomSource
+from job_agent.sources.board import HttpJson
+from job_agent.sources.intl_org import ReliefWebSource
+from job_agent.visa.signal import VisaSignalClassifier
+
+# (url, json_body, headers) -> text. Job-Room is POST-based, unlike the GET aggregators.
+JsonPost = Callable[[str, dict, Mapping[str, str] | None], str]
+
+# Geneva, Vienna, Brussels, Bonn/Frankfurt, Rome, Copenhagen hubs for Track B.
+_INTL_ORG_HUBS = ["CHE", "AUT", "BEL", "DEU", "FRA", "ITA", "DNK"]
+
+
+def build_live_scout(
+    *,
+    http_get: HttpGet,
+    http_json: HttpJson,
+    http_post: JsonPost,
+    seeds: list[CompanyTarget] | None = None,
+    search_fn: SearchFn | None = None,
+    store: JobStore | None = None,
+    obs: ObservabilityStore | None = None,
+    classifier: VisaSignalClassifier | None = None,
+    intl_org_iso3: list[str] | None = None,
+) -> ScoutAgent:
+    """Wire the discovery engine + Layer-1 aggregators + Track-B into one ScoutAgent.
+
+    ``search_fn`` (Brave) enables ``AtsSearchDiscoverer`` — the engine that finds
+    actively-hiring companies with no names known upfront. Filter its cross-border
+    output to the target country with ``keep_jobs_in_country`` after the run.
+    """
+    discoverers: list[CompanyDiscoverer] = [SeedDiscoverer(seeds or [])]
+    if search_fn is not None:
+        discoverers.append(AtsSearchDiscoverer(search_fn))
+    board_sources = [
+        ArbeitsagenturSource(http_json),
+        EuresSource(http_json),
+        JobRoomSource(http_post),  # Job-Room uses POST
+        ReliefWebSource(http_json, iso3=intl_org_iso3 or _INTL_ORG_HUBS),
+    ]
+    return ScoutAgent(
+        http_get=http_get,
+        discoverers=discoverers,
+        board_sources=board_sources,
+        store=store,
+        obs=obs,
+        classifier=classifier or VisaSignalClassifier(),
+    )
+
+
+def brave_search_fn(settings: Settings | None = None) -> SearchFn | None:
+    """A Brave-Search ``SearchFn`` (query → result URLs), or ``None`` if no key set."""
+    s = settings if settings is not None else get_settings()
+    if not s.brave_api_key:
+        return None
+    import json
+    import urllib.parse
+
+    from job_agent.sources.http import urllib_http
+
+    def search(query: str) -> list[str]:
+        url = "https://api.search.brave.com/res/v1/web/search?" + urllib.parse.urlencode(
+            {"q": query, "count": 20}
+        )
+        body = urllib_http(url, {"X-Subscription-Token": s.brave_api_key, "Accept": "application/json"})
+        results = (json.loads(body).get("web") or {}).get("results", [])
+        return [r.get("url", "") for r in results]
+
+    return search
+
+
+def production_transports() -> tuple[HttpGet, HttpJson, JsonPost]:
+    """Real stdlib transports: ``http_get(url)`` (ATS), ``http_json(url, headers)``
+    (GET board sources, may send auth headers), ``http_post(url, body, headers)`` (Job-Room)."""
+    from job_agent.sources.http import urllib_http, urllib_post
+
+    def http_get(url: str) -> str:
+        return urllib_http(url)
+
+    def http_json(url: str, headers=None) -> str:
+        return urllib_http(url, headers)
+
+    def http_post(url: str, body: dict, headers=None) -> str:
+        return urllib_post(url, body, headers)
+
+    return http_get, http_json, http_post
