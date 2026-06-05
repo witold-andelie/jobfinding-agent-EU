@@ -231,20 +231,30 @@ with tab_matches:
             if cols[2].button("➕ Track application", key=f"tr-{job.external_id}"):
                 tracker.create(job, profile.nationality,
                                st.session_state.letters.get(job.external_id))
-                st.success("Added to Applications.")
+                st.session_state.pop("apps_cache", None)  # Applications tab reloads on ↻
+                st.success("Added — open the Applications tab and click ↻ Load / refresh.")
             if job.external_id in st.session_state.letters:
                 st.text_area("Cover letter", st.session_state.letters[job.external_id],
                              height=240, key=f"lt-{job.external_id}")
 
-with tab_apps:
+
+def _refresh_apps() -> None:
     try:
-        due = {a.id for a in tracker.due_followups()}
-        apps = tracker.applications()
+        st.session_state.apps_cache = (
+            tracker.applications(), {a.id for a in tracker.due_followups()})
     except Exception as exc:  # noqa: BLE001 - a store hiccup must not blank the page
         st.error(f"Could not load applications: {exc}")
-        apps, due = [], set()
+        st.session_state.apps_cache = ([], set())
+
+
+with tab_apps:
+    # Lazy: the Supabase read happens only on click, never on initial page load (a
+    # blocking read at load was the likely cause of the blank page on the cloud).
+    if st.button("↻ Load / refresh applications"):
+        _refresh_apps()
+    apps, due = st.session_state.get("apps_cache", ([], set()))
     if not apps:
-        st.info("No applications yet — add some from the Matches tab.")
+        st.info("Click **↻ Load / refresh applications** to see your tracked applications.")
     for app in apps:
         flag = " ⏰ follow up" if app.id in due else ""
         st.markdown(f"**{app.job_title}** · {app.company} — `{app.status.value}`{flag}")
@@ -254,6 +264,7 @@ with tab_apps:
             for i, status in enumerate(nxt):
                 if cols[i].button(status, key=f"adv-{app.id}-{status}"):
                     tracker.advance(app.id, ApplicationStatus(status))
+                    _refresh_apps()
                     st.rerun()
         else:
             st.caption("(terminal)")
