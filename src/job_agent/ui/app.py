@@ -34,7 +34,7 @@ from job_agent.tracker.state_machine import ALLOWED_TRANSITIONS  # noqa: E402
 from job_agent.ui.demo_data import demo_jobs  # noqa: E402
 
 st.set_page_config(page_title="EU Job Agent", layout="wide")
-st.caption("build 2026-06-05-d")  # version heartbeat: if you see this, the latest code is live
+st.caption("build 2026-06-05-e")  # version heartbeat: if you see this, the latest code is live
 
 
 def _application_store():
@@ -197,8 +197,9 @@ with tab_matches:
                 "**🔍 Find / refresh jobs**.")
     else:
         st.caption(f"{len(ranked)} viable jobs, ranked by visa feasibility then CV relevance.")
-    for r in (ranked or []):
+    for i, r in enumerate(ranked or []):
         job = r.job
+        uid = f"{i}-{job.source}-{job.external_id}"  # UNIQUE widget key (ids can repeat across sources)
         emoji = {"green": "🟢", "yellow": "🟡", "red": "🔴"}[r.feasibility.level.value]
         with st.expander(f"{emoji} {job.title} · {job.company} · {job.city}, {job.country}  "
                          f"— score {r.score} (sim {r.similarity})"):
@@ -208,7 +209,7 @@ with tab_matches:
             st.write(job.description)
             parsed_cv = st.session_state.get("parsed_cv")
             cols = st.columns(3)
-            if llm_enabled and cols[0].button("✍️ Cover letter", key=f"cl-{job.external_id}"):
+            if llm_enabled and cols[0].button("✍️ Cover letter", key=f"cl-{uid}"):
                 from job_agent.matching import analyze_gap
                 from job_agent.writing import generate_cover_letter
 
@@ -216,9 +217,8 @@ with tab_matches:
                 ask = _llm_ask()
                 gap = analyze_gap(profile, job, ask)
                 letter = generate_cover_letter(profile, job, ask, emphasis=gap.emphasis)
-                st.session_state.letters[job.external_id] = letter
-            if llm_enabled and parsed_cv and cols[1].button("📄 CV variant (.docx)",
-                                                            key=f"cv-{job.external_id}"):
+                st.session_state.letters[uid] = letter
+            if llm_enabled and parsed_cv and cols[1].button("📄 CV variant (.docx)", key=f"cv-{uid}"):
                 from job_agent.matching import analyze_gap
                 from job_agent.writing import generate_cv_variant
 
@@ -228,15 +228,14 @@ with tab_matches:
                 path = generate_cv_variant(parsed_cv, job, ask, matched=gap.matched)
                 with open(path, "rb") as fh:
                     st.download_button("⬇️ Download tailored CV", fh.read(), file_name=path.name,
-                                       key=f"dl-{job.external_id}")
-            if cols[2].button("➕ Track application", key=f"tr-{job.external_id}"):
-                tracker.create(job, profile.nationality,
-                               st.session_state.letters.get(job.external_id))
+                                       key=f"dl-{uid}")
+            if cols[2].button("➕ Track application", key=f"tr-{uid}"):
+                tracker.create(job, profile.nationality, st.session_state.letters.get(uid))
                 st.session_state.pop("apps_cache", None)  # Applications tab reloads on ↻
                 st.success("Added — open the Applications tab and click ↻ Load / refresh.")
-            if job.external_id in st.session_state.letters:
-                st.text_area("Cover letter", st.session_state.letters[job.external_id],
-                             height=240, key=f"lt-{job.external_id}")
+            if uid in st.session_state.letters:
+                st.text_area("Cover letter", st.session_state.letters[uid],
+                             height=240, key=f"lt-{uid}")
 
 
 def _refresh_apps() -> None:
