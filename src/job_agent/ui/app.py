@@ -34,7 +34,7 @@ from job_agent.tracker.state_machine import ALLOWED_TRANSITIONS  # noqa: E402
 from job_agent.ui.demo_data import demo_jobs  # noqa: E402
 
 st.set_page_config(page_title="EU Job Agent", layout="wide")
-st.caption("build 2026-06-05-e")  # version heartbeat: if you see this, the latest code is live
+st.caption("build 2026-06-05-f")  # version heartbeat: if you see this, the latest code is live
 
 
 def _application_store():
@@ -196,8 +196,9 @@ with tab_matches:
         st.info("Set your profile in the sidebar, choose a source, then click "
                 "**🔍 Find / refresh jobs**.")
     else:
-        st.caption(f"{len(ranked)} viable jobs, ranked by visa feasibility then CV relevance.")
-    for i, r in enumerate(ranked or []):
+        st.caption(f"{len(ranked)} viable jobs, ranked by visa feasibility then CV relevance "
+                   f"(showing top {min(len(ranked), 50)}).")
+    for i, r in enumerate((ranked or [])[:50]):  # cap rendered cards — hundreds would be too heavy
         job = r.job
         uid = f"{i}-{job.source}-{job.external_id}"  # UNIQUE widget key (ids can repeat across sources)
         emoji = {"green": "🟢", "yellow": "🟡", "red": "🔴"}[r.feasibility.level.value]
