@@ -141,6 +141,7 @@ def _load_jobs():
         http_get=http_get, http_json=http_json, http_post=http_post,
         seeds=load_seeds("seeds/seeds.json"),
         search_fn=brave_search_fn(settings),  # the discovery engine (if BRAVE_API_KEY set)
+        search_cities=2,  # lighter on cloud memory + Brave quota than the default 3
         obs=obs,
     )
     query = ScoutQuery(DiscoveryQuery(
@@ -171,15 +172,30 @@ st.title("EU Job Agent")
 tab_matches, tab_apps = st.tabs(["🎯 Matches", "📋 Applications"])
 
 with tab_matches:
-    from job_agent.matching import default_similarity
+    # Compute ONLY when the button is clicked, then cache in session_state. Otherwise
+    # every interaction (track / cover-letter) would re-run the whole expensive
+    # discovery + embedding pipeline — which is what white-screened the cloud app.
+    if st.button("🔍 Find / refresh jobs", type="primary"):
+        from job_agent.matching import default_similarity
 
-    jobs, errors = _load_jobs()
-    if errors:
-        st.warning("Some sources had issues:\n\n" + "\n\n".join(f"- {e}" for e in errors[:5]))
-    ranked = shortlist(profile, jobs, similarity=default_similarity())
-    st.caption(f"{len(ranked)} viable jobs (red / no-route filtered out), ranked by "
-               "visa feasibility then CV relevance.")
-    for r in ranked:
+        with st.spinner("Working… Live mode discovers companies via search; can take a minute."):
+            found, errs = _load_jobs()
+            try:
+                st.session_state.ranked = shortlist(profile, found, similarity=default_similarity())
+            except Exception as exc:  # noqa: BLE001 - embeddings down → lexical fallback
+                st.session_state.ranked = shortlist(profile, found)
+                errs = list(errs) + [f"semantic ranking unavailable ({exc}); used lexical."]
+            st.session_state.scout_errors = errs
+
+    for _e in st.session_state.get("scout_errors", [])[:5]:
+        st.warning(_e)
+    ranked = st.session_state.get("ranked")
+    if ranked is None:
+        st.info("Set your profile in the sidebar, choose a source, then click "
+                "**🔍 Find / refresh jobs**.")
+    else:
+        st.caption(f"{len(ranked)} viable jobs, ranked by visa feasibility then CV relevance.")
+    for r in (ranked or []):
         job = r.job
         emoji = {"green": "🟢", "yellow": "🟡", "red": "🔴"}[r.feasibility.level.value]
         with st.expander(f"{emoji} {job.title} · {job.company} · {job.city}, {job.country}  "
@@ -220,8 +236,12 @@ with tab_matches:
                              height=240, key=f"lt-{job.external_id}")
 
 with tab_apps:
-    due = {a.id for a in tracker.due_followups()}
-    apps = tracker.applications()
+    try:
+        due = {a.id for a in tracker.due_followups()}
+        apps = tracker.applications()
+    except Exception as exc:  # noqa: BLE001 - a store hiccup must not blank the page
+        st.error(f"Could not load applications: {exc}")
+        apps, due = [], set()
     if not apps:
         st.info("No applications yet — add some from the Matches tab.")
     for app in apps:

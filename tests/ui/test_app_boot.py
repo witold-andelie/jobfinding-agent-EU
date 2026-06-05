@@ -10,16 +10,25 @@ pytest.importorskip("streamlit")
 from streamlit.testing.v1 import AppTest  # noqa: E402
 
 
+def _click_find(at):
+    """Matches are computed on demand — click 'Find / refresh jobs' (Demo data, offline)."""
+    find = [b for b in at.button if b.label and "Find" in b.label]
+    assert find, "expected a 'Find / refresh jobs' button"
+    return find[0].click().run()
+
+
 def test_app_boots_and_shows_matches() -> None:
     at = AppTest.from_file("src/job_agent/ui/app.py", default_timeout=30).run()
     assert not at.exception
-    # Title rendered, and the default profile produced a ranked Matches list.
     assert any("EU Job Agent" in t.value for t in at.title)
-    assert len(at.expander) >= 1  # at least one job card
+    _click_find(at)
+    assert not at.exception
+    assert len(at.expander) >= 1  # job cards rendered after the search
 
 
 def test_tracking_an_application_flows_to_applications_tab() -> None:
     at = AppTest.from_file("src/job_agent/ui/app.py", default_timeout=30).run()
+    _click_find(at)
     track_buttons = [b for b in at.button if b.key and b.key.startswith("tr-")]
     assert track_buttons, "expected a 'Track application' button"
     track_buttons[0].click().run()

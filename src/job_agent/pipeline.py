@@ -38,6 +38,7 @@ def build_live_scout(
     http_post: JsonPost,
     seeds: list[CompanyTarget] | None = None,
     search_fn: SearchFn | None = None,
+    search_cities: int = 3,
     store: JobStore | None = None,
     obs: ObservabilityStore | None = None,
     classifier: VisaSignalClassifier | None = None,
@@ -46,12 +47,13 @@ def build_live_scout(
     """Wire the discovery engine + Layer-1 aggregators + Track-B into one ScoutAgent.
 
     ``search_fn`` (Brave) enables ``AtsSearchDiscoverer`` — the engine that finds
-    actively-hiring companies with no names known upfront. Filter its cross-border
-    output to the target country with ``keep_jobs_in_country`` after the run.
+    actively-hiring companies with no names known upfront. ``search_cities`` trades
+    breadth for Brave-quota/memory (each city × ATS domain = one query). Filter the
+    cross-border output to the target country with ``keep_jobs_in_country`` afterwards.
     """
     discoverers: list[CompanyDiscoverer] = [SeedDiscoverer(seeds or [])]
     if search_fn is not None:
-        discoverers.append(AtsSearchDiscoverer(search_fn))
+        discoverers.append(AtsSearchDiscoverer(search_fn, cities=search_cities))
     board_sources = [
         ArbeitsagenturSource(http_json),
         EuresSource(http_json),
