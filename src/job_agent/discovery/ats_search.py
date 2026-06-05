@@ -63,10 +63,12 @@ class AtsSearchDiscoverer:
         *,
         platforms: list[ATSPlatform] | None = None,
         cities: int = 3,
+        max_companies: int | None = None,
     ) -> None:
         self._search = search_fn
         self._platforms = platforms or list(_ATS_DOMAINS)
         self._cities = cities
+        self._max_companies = max_companies
 
     def discover(self, query: DiscoveryQuery) -> list[CompanyTarget]:
         cities = _search_cities(query.country, self._cities)
@@ -75,6 +77,10 @@ class AtsSearchDiscoverer:
         for platform in self._platforms:
             for domain in _ATS_DOMAINS.get(platform, []):
                 for city in cities:
+                    # Stop issuing searches once we have enough companies (caps Brave
+                    # quota AND the downstream fetch — important on constrained hosts).
+                    if self._max_companies and len(found) >= self._max_companies:
+                        return list(found.values())
                     q = " ".join(p for p in (f"site:{domain}", city, keywords) if p)
                     for url in self._search(q):
                         plat, handle = detect_ats(url)

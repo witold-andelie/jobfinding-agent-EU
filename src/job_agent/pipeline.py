@@ -39,6 +39,7 @@ def build_live_scout(
     seeds: list[CompanyTarget] | None = None,
     search_fn: SearchFn | None = None,
     search_cities: int = 3,
+    search_max_companies: int | None = None,
     store: JobStore | None = None,
     obs: ObservabilityStore | None = None,
     classifier: VisaSignalClassifier | None = None,
@@ -47,13 +48,15 @@ def build_live_scout(
     """Wire the discovery engine + Layer-1 aggregators + Track-B into one ScoutAgent.
 
     ``search_fn`` (Brave) enables ``AtsSearchDiscoverer`` — the engine that finds
-    actively-hiring companies with no names known upfront. ``search_cities`` trades
-    breadth for Brave-quota/memory (each city × ATS domain = one query). Filter the
-    cross-border output to the target country with ``keep_jobs_in_country`` afterwards.
+    actively-hiring companies with no names known upfront. ``search_cities`` and
+    ``search_max_companies`` trade breadth for Brave-quota/memory (the latter caps how
+    many company feeds get fetched — important on constrained hosts like Streamlit
+    Cloud). Filter the cross-border output with ``keep_jobs_in_country`` afterwards.
     """
     discoverers: list[CompanyDiscoverer] = [SeedDiscoverer(seeds or [])]
     if search_fn is not None:
-        discoverers.append(AtsSearchDiscoverer(search_fn, cities=search_cities))
+        discoverers.append(AtsSearchDiscoverer(
+            search_fn, cities=search_cities, max_companies=search_max_companies))
     board_sources = [
         ArbeitsagenturSource(http_json),
         EuresSource(http_json),
@@ -76,15 +79,25 @@ def brave_search_fn(settings: Settings | None = None) -> SearchFn | None:
     if not s.brave_api_key:
         return None
     import json
+    import time
     import urllib.parse
 
     from job_agent.sources.http import urllib_http
 
+    last_call = [0.0]  # Brave free tier allows ~1 request/second → space calls out.
+
     def search(query: str) -> list[str]:
+        gap = 1.1 - (time.monotonic() - last_call[0])
+        if gap > 0:
+            time.sleep(gap)
+        last_call[0] = time.monotonic()
         url = "https://api.search.brave.com/res/v1/web/search?" + urllib.parse.urlencode(
             {"q": query, "count": 20}
         )
-        body = urllib_http(url, {"X-Subscription-Token": s.brave_api_key, "Accept": "application/json"})
+        try:
+            body = urllib_http(url, {"X-Subscription-Token": s.brave_api_key, "Accept": "application/json"})
+        except Exception:  # noqa: BLE001 - rate-limit/network blip → skip this query, keep going
+            return []
         results = (json.loads(body).get("web") or {}).get("results", [])
         return [r.get("url", "") for r in results]
 

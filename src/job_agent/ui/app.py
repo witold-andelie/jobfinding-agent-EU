@@ -141,7 +141,8 @@ def _load_jobs():
         http_get=http_get, http_json=http_json, http_post=http_post,
         seeds=load_seeds("seeds/seeds.json"),
         search_fn=brave_search_fn(settings),  # the discovery engine (if BRAVE_API_KEY set)
-        search_cities=2,  # lighter on cloud memory + Brave quota than the default 3
+        search_cities=2,           # lighter on cloud memory + Brave quota than the default 3
+        search_max_companies=40,   # bound the fetch so the cloud app doesn't run out of memory
         obs=obs,
     )
     query = ScoutQuery(DiscoveryQuery(
