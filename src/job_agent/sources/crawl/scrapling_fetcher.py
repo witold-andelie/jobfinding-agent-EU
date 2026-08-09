@@ -13,9 +13,11 @@ the fetch call is an injectable seam, so this module imports and unit-tests with
 from __future__ import annotations
 
 import importlib.util
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from job_agent.sources import HttpGet
+from job_agent.sources.ats.workday import JsonPost
 from job_agent.sources.crawl.career_page import CareerPageCrawler, RateLimiter, RobotsChecker
 
 
@@ -79,6 +81,7 @@ def build_career_crawler(
     robots: RobotsChecker | None = None,
     rate_limiter: RateLimiter | None = None,
     http_get: HttpGet | None = None,
+    workday_post: JsonPost | None = None,
     **fetch_opts: Any,
 ) -> CareerPageCrawler:
     """A ``CareerPageCrawler`` using Scrapling when installed, else the static fetch.
@@ -93,5 +96,6 @@ def build_career_crawler(
         else:
             from job_agent.sources.http import urllib_http
 
-            http_get = lambda url: urllib_http(url)  # noqa: E731
-    return CareerPageCrawler(http_get, robots=robots, rate_limiter=rate_limiter)
+            http_get = lambda url: urllib_http(url)
+    return CareerPageCrawler(http_get, robots=robots, rate_limiter=rate_limiter,
+                             workday_post=workday_post)

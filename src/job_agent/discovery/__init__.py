@@ -13,6 +13,7 @@ All return ``CompanyTarget`` objects that the Layer-2 ATS adapters can fetch.
 """
 
 from job_agent.discovery.ats_search import AtsSearchDiscoverer, keep_jobs_in_country
+from job_agent.discovery.web_search import CareerWebDiscoverer
 from job_agent.discovery.base import CompanyDiscoverer, DiscoveryQuery
 from job_agent.discovery.fingerprint import AtsDetectDiscoverer, detect_ats
 from job_agent.discovery.registry import (
@@ -29,6 +30,7 @@ __all__ = [
     "AresClient",
     "AtsDetectDiscoverer",
     "AtsSearchDiscoverer",
+    "CareerWebDiscoverer",
     "CompanyDiscoverer",
     "CompanyRecord",
     "DiscoveryQuery",

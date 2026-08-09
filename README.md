@@ -31,11 +31,42 @@ that never mention "visa sponsorship" are still fully viable. See
 > The encoded immigration rules are a starting point and must be verified against
 > official sources before being shown to a user as advice.
 
-## Status
+## Current Status
 
-Offline-first. No live LLM / DB / network calls yet — everything runs under
-`pytest`. Country coverage target: DE, NL, FR, AT, BE, LU, CZ, PL, DK, IT, CH
-(+ international-org hubs).
+Offline-first and live-capable. The test suite uses injected transports and makes no
+network calls. Streamlit Live mode can use an OpenAI-compatible LLM, Jina embeddings,
+Brave Search, Scrapling, EURES, public ATS feeds, and optional Supabase persistence.
+
+## Discovery Strategy
+
+The system does not require the user to know company names or recruitment domains.
+
+1. An LLM creates multilingual search queries from the candidate's field, target
+   country, cities, and local hiring terminology.
+2. Brave Search finds public ATS pages, company-owned career portals, and job detail
+   pages while excluding major aggregators.
+3. Known ATS feeds are parsed structurally. Unknown career pages are fetched with
+   Scrapling when installed, with a urllib fallback.
+4. ATS fingerprints and direct job-detail extraction cover Workday, Ashby,
+   SmartRecruiters, and company-specific portals such as `jobs.doosan.com`.
+
+Country is the primary filter. City is displayed and used for location hints, but a
+missing or unfamiliar city does not discard a country-matching vacancy. The search
+diagnostics panel exposes query count, discovered companies, fetch success, source,
+ATS, and employment-type distributions.
+
+EURES uses its public POST search API and does not require a separate API key. It
+covers 31 EEA/Swiss countries and returns public-employment-service vacancies.
+
+## Main Components
+
+- `Scout` — multilingual query planning, ATS discovery, web discovery, crawling,
+  source isolation, deduplication, and observability.
+- `Visa` — country-aware feasibility assessment; sponsorship remains a soft signal.
+- `Matcher` — lexical fallback or optional semantic embeddings via Jina.
+- `Writer` — grounded cover letters and tailored CV variants.
+- `Tracker` — application lifecycle, reminders, and optional Supabase persistence.
+- `Streamlit UI` — Demo/Live search, ranked matches, diagnostics, and tracking.
 
 ## Setup
 
@@ -43,3 +74,14 @@ Offline-first. No live LLM / DB / network calls yet — everything runs under
 uv sync --extra dev
 uv run pytest
 ```
+
+For the full local Live UI:
+
+```bash
+uv pip install -e ".[llm,ui,scrape]"
+python -m playwright install chromium
+streamlit run streamlit_app.py
+```
+
+Streamlit Cloud configuration is documented in
+[`docs/STREAMLIT_SETUP.md`](docs/STREAMLIT_SETUP.md).

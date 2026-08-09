@@ -26,7 +26,8 @@ class Settings(BaseSettings):
     llm_provider: str = Field(default="deepseek")
     llm_api_key: str = Field(default="")
     llm_base_url: str = Field(default="https://api.deepseek.com")  # OpenAI-compatible
-    llm_model: str = Field(default="deepseek-chat")  # or "deepseek-reasoner"
+    llm_model: str = Field(default="deepseek-v4-flash")
+    llm_api_mode: str = Field(default="auto")  # "chat" or Responses API; auto detects /responses
 
     # Embeddings (DeepSeek has none) — any OpenAI-protocol endpoint: OpenAI, Jina,
     # Voyage, or a local server (ollama / text-embeddings-inference) via base_url.

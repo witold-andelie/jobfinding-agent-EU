@@ -25,6 +25,8 @@ def test_discovers_tenants_from_search_results() -> None:
         (ATSPlatform.lever, "charlie"), (ATSPlatform.greenhouse, "delta"),
     }
     assert all(c.discovered_via == "ats_search" for c in companies)
+    assert discoverer.stats["queries"] > 0
+    assert discoverer.stats["companies"] == len(companies)
 
 
 def test_query_targets_country_location() -> None:
@@ -35,7 +37,7 @@ def test_query_targets_country_location() -> None:
     assert any("site:jobs.personio.de praha developer" == q for q in seen)
 
 
-def test_keep_jobs_in_country_filters_by_city() -> None:
+def test_keep_jobs_in_country_does_not_require_city() -> None:
     jobs = [
         Job(source="personio", external_id="1", title="Dev", company="X", country="", city="Prague"),
         Job(source="personio", external_id="2", title="Dev", company="X", country="", city="Berlin",
@@ -46,3 +48,29 @@ def test_keep_jobs_in_country_filters_by_city() -> None:
     ]
     cz = keep_jobs_in_country(jobs, "CZ")
     assert {j.external_id for j in cz} == {"1", "3", "4"}  # Berlin dropped despite the mention
+    assert keep_jobs_in_country([
+        Job(source="personio", external_id="5", title="Dev", company="X", country="CZ"),
+    ], "CZ")[0].external_id == "5"
+
+
+def test_discovers_workday_handle_from_search_result() -> None:
+    results = {
+        "site:*.myworkdayjobs.com praha": [
+            "https://bobcat.wd1.myworkdayjobs.com/en-US/BobcatExternal/job/CZ/Engineer_JR1",
+        ]
+    }
+    discoverer = AtsSearchDiscoverer(lambda q: results.get(q, []))
+    companies = discoverer.discover(DiscoveryQuery(country="CZ"))
+
+    workday = next(c for c in companies if c.ats is ATSPlatform.workday)
+    assert workday.ats_handle == "bobcat|wd1|BobcatExternal"
+
+
+def test_country_filter_keeps_explicit_country_without_city() -> None:
+    jobs = [
+        Job(source="jobroom", external_id="1", title="Engineer", company="X",
+            country="CZ", city=None),
+        Job(source="workday", external_id="2", title="Engineer", company="X",
+            country="DE", city=None),
+    ]
+    assert [j.external_id for j in keep_jobs_in_country(jobs, "CZ")] == ["1"]

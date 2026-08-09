@@ -7,20 +7,22 @@ data. Transports are injected, so the factory is unit-testable offline; only
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Callable
+from collections.abc import Callable, Mapping
 
 from job_agent.agents import ScoutAgent
 from job_agent.config import Settings, get_settings
 from job_agent.discovery.ats_search import AtsSearchDiscoverer, SearchFn
 from job_agent.discovery.base import CompanyDiscoverer
+from job_agent.discovery.query_planner import QueryPlanner
 from job_agent.discovery.seed import SeedDiscoverer
+from job_agent.discovery.web_search import CareerWebDiscoverer
 from job_agent.models.company import CompanyTarget
 from job_agent.observability import ObservabilityStore
 from job_agent.persistence import JobStore
 from job_agent.sources import HttpGet
 from job_agent.sources.aggregators import ArbeitsagenturSource, EuresSource, JobRoomSource
 from job_agent.sources.board import HttpJson
+from job_agent.sources.crawl.scrapling_fetcher import build_career_crawler
 from job_agent.sources.intl_org import ReliefWebSource
 from job_agent.visa.signal import VisaSignalClassifier
 
@@ -44,6 +46,7 @@ def build_live_scout(
     obs: ObservabilityStore | None = None,
     classifier: VisaSignalClassifier | None = None,
     intl_org_iso3: list[str] | None = None,
+    web_query_planner: QueryPlanner | None = None,
 ) -> ScoutAgent:
     """Wire the discovery engine + Layer-1 aggregators + Track-B into one ScoutAgent.
 
@@ -57,9 +60,13 @@ def build_live_scout(
     if search_fn is not None:
         discoverers.append(AtsSearchDiscoverer(
             search_fn, cities=search_cities, max_companies=search_max_companies))
+        discoverers.append(CareerWebDiscoverer(
+            search_fn, cities=search_cities,
+            max_companies=min(search_max_companies or 30, 15),
+            query_planner=web_query_planner))
     board_sources = [
         ArbeitsagenturSource(http_json),
-        EuresSource(http_json),
+        EuresSource(http_json, post=http_post),
         JobRoomSource(http_post),  # Job-Room uses POST
         ReliefWebSource(http_json, iso3=intl_org_iso3 or _INTL_ORG_HUBS),
     ]
@@ -70,6 +77,10 @@ def build_live_scout(
         store=store,
         obs=obs,
         classifier=classifier or VisaSignalClassifier(),
+        workday_post=http_post,
+        # Let the crawler choose Scrapling when installed; otherwise it falls back
+        # to urllib. The ATS and board transports above remain injectable for tests.
+        career_crawler=build_career_crawler(workday_post=http_post) if search_fn else None,
     )
 
 

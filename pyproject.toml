@@ -17,7 +17,7 @@ dev = [
     "pytest>=8.2",
 ]
 llm = [
-    "openai>=1.40",  # DeepSeek speaks the OpenAI protocol; used via base_url
+    "openai>=1.40",  # OpenAI-compatible LLM providers; used via base_url
 ]
 ui = [
     "streamlit>=1.36",

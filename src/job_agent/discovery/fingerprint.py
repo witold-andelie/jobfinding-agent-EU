@@ -23,6 +23,10 @@ _PATTERNS: list[tuple[ATSPlatform, re.Pattern[str]]] = [
     (ATSPlatform.smartrecruiters, re.compile(r"careers\.smartrecruiters\.com/([\w-]+)")),
     (ATSPlatform.workday, re.compile(r"([\w-]+)\.[\w-]+\.myworkdayjobs\.com")),
 ]
+_WORKDAY_URL = re.compile(
+    r"https?://([\w-]+)\.([\w-]+)\.myworkdayjobs\.com/[^/]+/([^/?#]+)",
+    re.IGNORECASE,
+)
 
 
 def detect_ats(text: str) -> tuple[ATSPlatform, str | None]:
@@ -31,6 +35,10 @@ def detect_ats(text: str) -> tuple[ATSPlatform, str | None]:
     ``text`` can be a careers URL or full page HTML. Returns
     ``(ATSPlatform.unknown, None)`` when nothing matches.
     """
+    workday = _WORKDAY_URL.search(text)
+    if workday:
+        tenant, dc, site = workday.groups()
+        return ATSPlatform.workday, f"{tenant}|{dc}|{site}"
     for platform, pattern in _PATTERNS:
         m = pattern.search(text)
         if m:

@@ -52,6 +52,8 @@ class ArbeitsagenturSource:
         return {"X-API-Key": _API_KEY, "Accept": "application/json"}
 
     def fetch(self, query: DiscoveryQuery) -> list[Job]:
+        if query.country and query.country.upper() != "DE":
+            return []
         params: dict[str, str] = {"page": "1", "size": str(self._page_size)}
         if query.keywords:
             params["was"] = " ".join(query.keywords)

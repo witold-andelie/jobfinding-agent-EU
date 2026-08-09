@@ -45,6 +45,7 @@ class CompanyTarget(BaseModel):
     ats_handle: str | None = None
     careers_url: str | None = None
     website: str | None = None
+    city_hint: str | None = None  # search location used when a plain page has no job location
     industry: str | None = None
     is_sme: bool = True
     discovered_via: str = "seed"  # "registry" | "chamber" | "seed" | "ats_crawl"

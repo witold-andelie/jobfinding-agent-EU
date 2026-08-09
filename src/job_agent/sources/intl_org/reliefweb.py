@@ -1,6 +1,6 @@
 """ReliefWeb jobs adapter (Track B).
 
-Public API: ``https://api.reliefweb.int/v1/jobs`` (JSON, no auth). Returns UN / NGO
+Public API: ``https://api.reliefweb.int/v2/jobs`` (JSON, no auth). Returns UN / NGO
 / humanitarian roles worldwide; we filter by country (e.g. CHE for Geneva) and tag
 them ``track=intl_org`` so the visa engine applies the international-organisation
 legal route (host-country legitimation, not a national work permit).
@@ -34,7 +34,7 @@ def _employment_from_type(type_name: str, title: str) -> EmploymentType:
 class ReliefWebAdapter:
     def feed_url(self, country_iso3: str, limit: int = 50) -> str:
         return (
-            "https://api.reliefweb.int/v1/jobs"
+            "https://api.reliefweb.int/v2/jobs"
             f"?appname=eu-job-agent&limit={limit}"
             "&fields[include][]=title&fields[include][]=source&fields[include][]=country"
             "&fields[include][]=city&fields[include][]=url&fields[include][]=type"

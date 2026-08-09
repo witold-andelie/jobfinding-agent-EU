@@ -56,6 +56,19 @@ def test_scout_runs_both_tracks_and_persists() -> None:
     assert obs.runs[0]["status"] == "success"
 
 
+def test_scout_returns_source_and_fetch_diagnostics() -> None:
+    agent = ScoutAgent(
+        http_get=_router({"personio": _PERSONIO}),
+        discoverers=[SeedDiscoverer([_company("acme")])],
+    )
+
+    result = agent.run(ScoutQuery(DiscoveryQuery(country="CZ")))
+
+    assert result.diagnostics["discovered_companies"] == 1
+    assert result.diagnostics["company_fetch_successes"] == 1
+    assert result.diagnostics["jobs_by_source"] == {"personio": 1}
+
+
 def test_one_company_failure_does_not_abort_others() -> None:
     # 'boom' has no fixture → its fetch raises; 'acme' must still come through.
     seeds = SeedDiscoverer([_company("boom"), _company("acme")])

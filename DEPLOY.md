@@ -35,8 +35,10 @@ Streamlit Cloud deploys **from a GitHub repo**, so the project must be on GitHub
 ## Notes
 
 - `requirements.txt` (repo root) is what Cloud installs — runtime deps only. Scrapling is
-  excluded (Live mode doesn't crawl career pages; Cloud can't run Playwright browsers).
-- Quota: each Live search ≈ 18 Brave calls (3 cities × 6 ATS domains). Brave free tier is
-  1000/month — tune `AtsSearchDiscoverer(cities=...)` if needed.
+  excluded because Streamlit Cloud cannot run the browser binaries reliably; Live mode
+  falls back to the static crawler there. Local installs can enable Scrapling with the
+  `scrape` extra.
+- Quota: Live search uses multiple city/ATS/web queries. Brave free tier is 1000/month;
+  tune `search_cities` and `search_max_companies` in the UI pipeline if needed.
 - Without LLM/Brave/Supabase secrets the app still runs (Demo mode, in-memory) and
   degrades gracefully.

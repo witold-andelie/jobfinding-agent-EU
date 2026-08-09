@@ -4,7 +4,7 @@ Run with:  streamlit run src/job_agent/ui/app.py
 (install the UI extra first:  uv pip install -e '.[llm,ui]')
 
 Ties the pipeline together: build a candidate profile (optionally parsed from a CV
-via DeepSeek), see a visa-aware ranked shortlist, generate non-fabricated cover
+via the configured LLM), see a visa-aware ranked shortlist, generate non-fabricated cover
 letters, and track applications through their lifecycle. Degrades gracefully with
 no LLM key — matching/tracking work offline; only CV-parse and cover-letter need it.
 """
@@ -97,7 +97,7 @@ track_choices = st.sidebar.multiselect("Tracks", ["private", "intl_org"], defaul
 
 if llm_enabled:
     cv_text = st.sidebar.text_area("…or paste a CV and parse it", height=120)
-    if st.sidebar.button("Parse CV with DeepSeek") and cv_text.strip():
+    if st.sidebar.button("Parse CV with LLM") and cv_text.strip():
         from job_agent.parsing import parse_cv
 
         start_run("cv-parse")
@@ -108,7 +108,7 @@ if llm_enabled:
         languages_raw = ", ".join(parsed.languages)
         degree_country = parsed.degree_country or degree_country
 else:
-    st.sidebar.info("Set LLM_API_KEY (DeepSeek) to enable CV parsing & cover letters.")
+    st.sidebar.info("Set LLM_API_KEY to enable CV parsing and cover letters.")
 
 profile = CandidateProfile(
     nationality=nationality.strip().upper(),
@@ -118,21 +118,26 @@ profile = CandidateProfile(
     languages=[lang.strip().lower() for lang in languages_raw.split(",") if lang.strip()],
     tracks=[Track(t) for t in track_choices] or [Track.private],
 )
-st.sidebar.caption(f"DeepSeek spend this session: ${obs.total_cost_usd():.4f}")
+st.sidebar.caption(f"LLM spend this session: ${obs.total_cost_usd():.4f}")
 
 st.sidebar.divider()
 st.sidebar.header("Jobs source")
 source_mode = st.sidebar.radio("Source", ["Demo data", "Live (configured sources)"])
 live_country = st.sidebar.text_input("Country (ISO-2)", value="CH")
-live_keywords = st.sidebar.text_input("Keywords", value="policy")
+live_keywords = st.sidebar.text_input(
+    "Optional job keywords (comma-separated)",
+    value="",
+    help="Leave blank for a broad search; jobs are ranked against your profile afterwards.",
+)
 
 
 def _load_jobs():
     """Demo data, or a real multi-source Scout run for live mode."""
     if not source_mode.startswith("Live"):
-        return demo_jobs(), []
+        return demo_jobs(), [], {}
     from job_agent.agents import ScoutQuery
     from job_agent.discovery import DiscoveryQuery, keep_jobs_in_country
+    from job_agent.discovery.query_planner import llm_query_planner
     from job_agent.discovery.seed_builder import load_seeds
     from job_agent.pipeline import brave_search_fn, build_live_scout, production_transports
 
@@ -142,12 +147,14 @@ def _load_jobs():
         http_get=http_get, http_json=http_json, http_post=http_post,
         seeds=load_seeds("seeds/seeds.json"),
         search_fn=brave_search_fn(settings),  # the discovery engine (if BRAVE_API_KEY set)
-        search_cities=2,           # lighter on cloud memory + Brave quota than the default 3
+        search_cities=4,           # include Czech industrial hubs such as Dobříš
         search_max_companies=40,   # bound the fetch so the cloud app doesn't run out of memory
         obs=obs,
+        web_query_planner=llm_query_planner(_llm_ask) if llm_enabled else None,
     )
     query = ScoutQuery(DiscoveryQuery(
         country=country,
+        industry=profile.field,
         keywords=[k.strip() for k in live_keywords.split(",") if k.strip()],
     ))
     try:
@@ -157,6 +164,9 @@ def _load_jobs():
         if country:
             jobs = keep_jobs_in_country(jobs, country)
         errors = list(result.errors)
+        diagnostics = dict(result.diagnostics)
+        diagnostics["jobs_after_country_filter"] = len(jobs)
+        diagnostics["filtered_out_by_country"] = len(result.jobs) - len(jobs)
         # Persist the relevant (in-country) jobs to Supabase if configured.
         store = _job_store()
         if store is not None and jobs:
@@ -164,9 +174,9 @@ def _load_jobs():
                 store.upsert_jobs(jobs)
             except Exception as exc:  # noqa: BLE001
                 errors.append(f"persist failed: {exc}")
-        return jobs, errors
+        return jobs, errors, diagnostics
     except Exception as exc:  # noqa: BLE001 - surface, don't crash the UI
-        return [], [f"live scout failed: {exc}"]
+        return [], [f"live scout failed: {exc}"], {}
 
 
 # --- main --------------------------------------------------------------------
@@ -181,16 +191,49 @@ with tab_matches:
         from job_agent.matching import default_similarity
 
         with st.spinner("Working… Live mode discovers companies via search; can take a minute."):
-            found, errs = _load_jobs()
+            found, errs, diagnostics = _load_jobs()
             try:
                 st.session_state.ranked = shortlist(profile, found, similarity=default_similarity())
             except Exception as exc:  # noqa: BLE001 - embeddings down → lexical fallback
                 st.session_state.ranked = shortlist(profile, found)
                 errs = list(errs) + [f"semantic ranking unavailable ({exc}); used lexical."]
             st.session_state.scout_errors = errs
+            st.session_state.scout_diagnostics = diagnostics
 
     for _e in st.session_state.get("scout_errors", [])[:5]:
         st.warning(_e)
+    diagnostics = st.session_state.get("scout_diagnostics", {})
+    if diagnostics:
+        with st.expander("Search diagnostics", expanded=False):
+            dcols = st.columns(4)
+            dcols[0].metric("Companies found", diagnostics.get("discovered_companies", 0))
+            dcols[1].metric("Fetch attempts", diagnostics.get("company_fetch_attempts", 0))
+            dcols[2].metric("Successful fetches", diagnostics.get("company_fetch_successes", 0))
+            dcols[3].metric("Filtered out", diagnostics.get("filtered_out_by_country", 0))
+
+            discovery = diagnostics.get("discovery", {})
+            if discovery:
+                st.dataframe(
+                    [
+                        {"discoverer": name, **stats}
+                        for name, stats in discovery.items()
+                    ],
+                    hide_index=True,
+                    use_container_width=True,
+                )
+            tables = (
+                ("Jobs by source", diagnostics.get("jobs_by_source", {})),
+                ("ATS platforms", diagnostics.get("ats_by_platform", {})),
+                ("Employment types", diagnostics.get("employment_by_type", {})),
+            )
+            for label, values in tables:
+                if values:
+                    st.caption(label)
+                    st.dataframe(
+                        [{"category": key, "count": value} for key, value in values.items()],
+                        hide_index=True,
+                        use_container_width=True,
+                    )
     ranked = st.session_state.get("ranked")
     if ranked is None:
         st.info("Set your profile in the sidebar, choose a source, then click "

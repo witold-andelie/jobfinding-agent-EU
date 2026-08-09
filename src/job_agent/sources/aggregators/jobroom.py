@@ -14,8 +14,8 @@ filtering is applied client-side (the request schema rejects unknown fields).
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
-from typing import Any, Callable
+from collections.abc import Callable, Mapping
+from typing import Any
 
 from job_agent.discovery.base import DiscoveryQuery
 from job_agent.models.job import Job
@@ -62,6 +62,8 @@ class JobRoomSource:
         self._page_size = page_size
 
     def fetch(self, query: DiscoveryQuery) -> list[Job]:
+        if query.country and query.country.upper() != "CH":
+            return []
         url = f"{_BASE_URL}?page=0&size={self._page_size}&sort=score"
         data = json.loads(self._post(url, {}, None))  # empty body = recent CH vacancies
         items = data if isinstance(data, list) else (data.get("content") or [])

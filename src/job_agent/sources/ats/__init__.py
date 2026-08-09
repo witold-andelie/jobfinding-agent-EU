@@ -9,18 +9,22 @@ not on LinkedIn/aggregators).
 from job_agent.models.company import ATSPlatform, CompanyTarget
 from job_agent.models.job import Job
 from job_agent.sources.ats.base import ATSAdapter
+from job_agent.sources.ats.ashby import AshbyAdapter
 from job_agent.sources.ats.greenhouse import GreenhouseAdapter
 from job_agent.sources.ats.lever import LeverAdapter
 from job_agent.sources.ats.personio import PersonioAdapter
 from job_agent.sources.ats.recruitee import RecruiteeAdapter
+from job_agent.sources.ats.smartrecruiters import SmartRecruitersAdapter
 from job_agent.sources.base import HttpGet
 
 # Registry: extend this as we add adapters (softgarden needs per-tenant tokens; workday...).
 ADAPTERS: dict[ATSPlatform, ATSAdapter] = {
+    ATSPlatform.ashby: AshbyAdapter(),
     ATSPlatform.personio: PersonioAdapter(),
     ATSPlatform.greenhouse: GreenhouseAdapter(),
     ATSPlatform.lever: LeverAdapter(),
     ATSPlatform.recruitee: RecruiteeAdapter(),
+    ATSPlatform.smartrecruiters: SmartRecruitersAdapter(),
 }
 
 

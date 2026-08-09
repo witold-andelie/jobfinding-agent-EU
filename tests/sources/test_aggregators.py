@@ -15,6 +15,13 @@ _EURES = """{"jvs": [
    "url": "https://eures/E1", "description": "Great role."}
 ]}"""
 
+_EURES_PUBLIC = """{"numberRecords": 1, "jvs": [
+  {"id": "PUB1", "title": "Manufacturing Engineer", "description": "Plant role.",
+   "locationMap": {"CZ": ["CZ01"]},
+   "employer": {"name": "Czech Factory", "website": "factory.cz"},
+   "positionScheduleCodes": ["fulltime"]}
+], "facets": {}}"""
+
 # Real Job-Room shape (probed live): array of jobAdvertisement → jobContent →
 # jobDescriptions[].title + company + location.
 _JOBROOM = """[
@@ -47,6 +54,23 @@ def test_eures_spans_countries_and_uppercases_country() -> None:
     assert jobs[0].company == "EU Co" and jobs[0].source_type == "eures"
 
 
+def test_eures_public_post_api_shape() -> None:
+    seen = {}
+
+    def post(url, body, headers=None):
+        seen["url"], seen["body"] = url, body
+        return _EURES_PUBLIC
+
+    src = EuresSource(http=lambda url, headers=None: "{}", post=post)
+    jobs = src.fetch(DiscoveryQuery(country="CZ", keywords=["manufacturing"]))
+
+    assert "/api/jv-searchengine/public/jv-search/search" in seen["url"]
+    assert seen["body"]["locationCodes"] == ["cz"]
+    assert seen["body"]["keywords"][0]["keyword"] == "manufacturing"
+    assert jobs[0].country == "CZ"
+    assert jobs[0].company == "Czech Factory"
+
+
 def test_jobroom_swiss_source_posts_and_parses() -> None:
     seen = {}
 
@@ -67,3 +91,15 @@ def test_jobroom_client_side_keyword_filter() -> None:
     src = JobRoomSource(lambda url, body, headers=None: _JOBROOM)
     jobs = src.fetch(DiscoveryQuery(country="CH", keywords=["policy"]))
     assert [j.title for j in jobs] == ["Junior Policy Analyst"]  # 'Pastry Chef' filtered out
+
+
+def test_jobroom_is_skipped_outside_switzerland() -> None:
+    called = False
+
+    def post(url, body, headers=None):
+        nonlocal called
+        called = True
+        return _JOBROOM
+
+    assert JobRoomSource(post).fetch(DiscoveryQuery(country="CZ")) == []
+    assert not called
