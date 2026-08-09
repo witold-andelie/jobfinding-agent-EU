@@ -5,6 +5,9 @@ description = "Job-search agent for junior international graduates who want to w
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
 dependencies = [
+    "streamlit==1.61.1",  # pin to fix Community Cloud white-screen from frontend /api/v2/user/details 404
+    "openai==2.53.0",  # OpenAI-compatible LLM providers; used via base_url
+    "python-docx>=1.1",  # tailored CV variant export
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "certifi>=2024.0",  # reliable TLS trust store for stdlib urllib (macOS has none)
