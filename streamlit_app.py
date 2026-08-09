@@ -1,15 +1,21 @@
 """Streamlit Community Cloud entry point.
 
-Cloud runs the app from the repo root, but the package lives under ``src/``. We
-execute ``src/job_agent/ui/app.py`` *as a script* via ``runpy`` rather than
-``import job_agent.ui.app``. The import path cached the module in ``sys.modules``
-and, on every sidebar rerun, re-importing a module that calls Streamlit top-level
-widgets caused Community Cloud to white-screen. ``runpy.run_path`` executes the
-script fresh each time (no module caching), mirroring inline behaviour.
+Executes ``src/job_agent/ui/app.py`` via ``runpy`` rather than
+``import job_agent.ui.app`` to avoid the module-cache wedge that blanked the page
+on every sidebar interaction on Community Cloud.
 """
 import pathlib
 import runpy
 import sys
+
+# Diagnostic: surface which site-packages dir resolves `openai`, before app.py runs.
+# Shows up in Cloud Logs as a printed line; helps pinpoint why the LLM button fails.
+try:
+    import openai  # noqa: E402
+    print(f"[diag] openai OK: {openai.__file__}", flush=True)  # noqa: T201
+except ModuleNotFoundError as exc:
+    print(f"[diag] openai MISSING: {exc}", flush=True)  # noqa: T201
+    print(f"[diag] sys.path = {sys.path}", flush=True)  # noqa: T201
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent / "src"))
 
