@@ -1,13 +1,12 @@
-"""Streamlit Community Cloud entry point.
-
-Cloud runs the app from the repo root, but the package lives under ``src/``. This
-shim puts ``src`` on the path and then renders the dashboard. Point the Streamlit
-Cloud app at this file (``streamlit_app.py``).
+"""Minimal repro: ONLY a sidebar text_input. No imports of job_agent, no secrets, no
+session_state, no widgets beyond one text_input. If deleting a char in this still
+white-screens on Cloud, the bug is in the Streamlit Cloud platform layer (not our
+code); if it does NOT white-screen, we add things back one by one to bisect.
 """
+import streamlit as st
 
-import pathlib
-import sys
-
-sys.path.insert(0, str(pathlib.Path(__file__).parent / "src"))
-
-import job_agent.ui.app  # noqa: E402,F401  -- importing the module renders the Streamlit app
+st.set_page_config(page_title="Minimal Repro", layout="wide")
+st.title("Minimal Repro")
+v = st.sidebar.text_input("Languages (ISO-639-1, comma)", value="en, fr")
+st.write(f"You typed: {v!r}")
+st.write(f"len={len(v)}")
