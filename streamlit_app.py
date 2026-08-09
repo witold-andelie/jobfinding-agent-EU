@@ -1,20 +1,17 @@
-"""bisect5: app.py is a NO-OP module. streamlit_app.py does sys.path.insert + import
-that module (so the import path runs) and then INLINE-renders the widgets. If this
-white-screens, the wedge is triggered by the import-of-submodule act itself (not the
-widgets). If it does NOT white-screen, the wedge is in running app.py's top-level
-code via the submodule reload path.
+"""Streamlit Community Cloud entry point.
+
+Cloud runs the app from the repo root, but the package lives under ``src/``. We
+execute ``src/job_agent/ui/app.py`` *as a script* via ``runpy`` rather than
+``import job_agent.ui.app``. The import path cached the module in ``sys.modules``
+and, on every sidebar rerun, re-importing a module that calls Streamlit top-level
+widgets caused Community Cloud to white-screen. ``runpy.run_path`` executes the
+script fresh each time (no module caching), mirroring inline behaviour.
 """
 import pathlib
+import runpy
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent / "src"))
 
-import job_agent.ui.app  # noqa: E402,F401  -- exercises the submodule load path
-
-import streamlit as st
-
-st.set_page_config(page_title="EU Job Agent", layout="wide")
-st.caption("build bisect5")
-
-languages_raw = st.sidebar.text_input("Languages (ISO-639-1, comma)", value="en, fr")
-st.write(f"len = {len(languages_raw)}")
+runpy.run_path(str(pathlib.Path(__file__).parent / "src" / "job_agent" / "ui" / "app.py"),
+               run_name="__main__")
