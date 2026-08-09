@@ -4,26 +4,48 @@ Executes ``src/job_agent/ui/app.py`` via ``runpy`` rather than
 ``import job_agent.ui.app`` to avoid the module-cache wedge that blanked the page
 on every sidebar interaction on Community Cloud.
 """
+import importlib
 import pathlib
 import runpy
 import sys
+import time
 
-# Diagnostic: list what is actually in the venv site-packages so we can see whether
-# openai was installed by pip (and what else is / isn't there).
-import os  # noqa: E402
-print("[diag] === site-packages contents (openai-ish) ===", flush=True)  # noqa: T201
-for p in sys.path:
-    if "site-packages" in p:
-        try:
-            entries = sorted(os.listdir(p))
-        except OSError as exc:
-            print(f"[diag] {p}: {exc}", flush=True)  # noqa: T201
-            continue
-        openai_like = [e for e in entries if "openai" in e.lower()]
-        print(f"[diag] {p}", flush=True)  # noqa: T201
-        print(f"[diag]   openai-like: {openai_like}", flush=True)  # noqa: T201
-        print(f"[diag]   total entries: {len(entries)}", flush=True)  # noqa: T201
-        print(f"[diag]   first 30: {entries[:30]}", flush=True)  # noqa: T201
+import streamlit as st
+
+# Wait for Streamlit to finish "Processing dependencies..." on Community Cloud.
+# The app script runs BEFORE pip install completes, so imports of freshly-installed
+# packages fail on the first boot. Poll for `openai` to become importable.
+_DEADLINE = time.time() + 180
+
+
+def _openai_ready() -> bool:
+    try:
+        importlib.import_module("openai")  # noqa: S404,F401
+        return True
+    except ModuleNotFoundError:
+        return False
+
+
+if not _openai_ready():
+    st.info("Installing dependencies… (first boot after a deploy can take a minute)")
+    placeholder = st.empty()
+    while time.time() < _DEADLINE:
+        if _openai_ready():
+            placeholder.empty()
+            break
+        time.sleep(2)
+    else:
+        placeholder.empty()
+        # Last-resort: list what's actually in venv site-packages for debugging.
+        import os
+        for p in sys.path:
+            if "site-packages" in p:
+                try:
+                    entries = sorted(os.listdir(p))
+                except OSError:
+                    continue
+                print(f"[diag] {p} openai-like: {[e for e in entries if 'openai' in e.lower()]}", flush=True)  # noqa: T201
+                st.warning("Dependencies did not finish installing; check Manage app → Logs.")
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent / "src"))
 
