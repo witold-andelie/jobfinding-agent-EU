@@ -1,7 +1,7 @@
 # Runtime deps for Streamlit Community Cloud (the deployed UI). Scrapling is
 # intentionally excluded — Live mode doesn't crawl career pages, and Cloud can't run
 # the Playwright browsers anyway.
-streamlit>=1.36
+streamlit==1.61.1  # pin: >=1.62 introduces a /api/v2/user/details frontend call that Streamlit Community Cloud's gateway returns 404 for, blanking the page on any sidebar interaction
 pydantic>=2.7
 pydantic-settings>=2.3
 certifi>=2024.0
