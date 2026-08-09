@@ -8,6 +8,7 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "certifi>=2024.0",  # reliable TLS trust store for stdlib urllib (macOS has none)
+    "supabase>=2.0",
 ]
 
 [project.optional-dependencies]
